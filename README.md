@@ -2,15 +2,13 @@
 
 这是一个基于 uni-app 和 Three.js 的微信小程序项目，用于展示和交互 3D 内容。
 
-## 作者联系方式
 
-- 微信：z827324885
-- 如需定制开发，请通过微信联系我
 
 ## 预览效果
 
-### 3D 场景展示
+### 3D 场景展示 static/preview/image.png
 ![3D场景预览](static/preview/image.png)
+
 
 <!-- ### 模型交互
 ![模型交互预览](static/preview/interaction.png)
@@ -129,6 +127,11 @@ npm install
 3. 提交更改
 4. 推送到分支
 5. 创建 Pull Request
+
+## 作者联系方式
+
+- 微信：z827324885
+- 如需定制开发，请通过微信联系我
 
 ## 许可证
 
