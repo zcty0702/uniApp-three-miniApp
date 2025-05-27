@@ -7,6 +7,19 @@
 - 微信：z827324885
 - 如需定制开发，请通过微信联系我
 
+## 预览效果
+
+### 3D 场景展示
+![3D场景预览](static/preview/image.png)
+
+<!-- ### 模型交互
+![模型交互预览](static/preview/interaction.png)
+
+### 性能展示
+![性能展示](static/preview/performance.png) -->
+
+> 注：以上图片仅供参考，实际效果请以小程序体验为准
+
 ## 版本说明
 
 ### v1.0.0 (2024-05-27)
