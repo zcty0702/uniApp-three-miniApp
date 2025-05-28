@@ -6,12 +6,7 @@
         		"navigationBarTitleText": "uni-app x"
         	}
         }
-		// {
-		// 	"path": "pages/indoor-navigation/index",
-		// 	"style": {
-		// 		"navigationBarTitleText": "uni-app x"
-		// 	}
-		// }
+	 
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",

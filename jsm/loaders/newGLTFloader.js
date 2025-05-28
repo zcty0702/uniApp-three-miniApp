@@ -2358,9 +2358,9 @@ export function registerGLTFLoader(THREE) {
         if (materialDef.name !== undefined) material.name = materialDef.name;
 
         // baseColorTexture, emissiveTexture, and specularGlossinessTexture use sRGB encoding.
-        if (material.map) material.map.encoding = THREE.sRGBEncoding;
-        if (material.emissiveMap) material.emissiveMap.encoding = THREE.sRGBEncoding;
-        if (material.specularMap) material.specularMap.encoding = THREE.sRGBEncoding;
+        if (material.map) material.map.colorSpace = THREE.SRGBColorSpace;
+        if (material.emissiveMap) material.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+        if (material.specularMap) material.specularMap.colorSpace = THREE.SRGBColorSpace;
 
         assignExtrasToUserData(material, materialDef);
 
@@ -2652,7 +2652,7 @@ export function registerGLTFLoader(THREE) {
 
       if (cameraDef.type === 'perspective') {
 
-        camera = new THREE.PerspectiveCamera(THREE.Math.radToDeg(params.yfov), params.aspectRatio || 1, params.znear || 1, params.zfar || 2e6);
+        camera = new THREE.PerspectiveCamera(THREE.MathUtils.radToDeg(params.yfov), params.aspectRatio || 1, params.znear || 1, params.zfar || 2e6);
 
       } else if (cameraDef.type === 'orthographic') {
 

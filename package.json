@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "@types/three": "^0.176.0",
-    "three": "^0.175.0",
+    "@types/three": "^0.162.0",
+    "three": "^0.176.0",
     "threejs-miniprogram": "^0.0.8"
   }
 }
