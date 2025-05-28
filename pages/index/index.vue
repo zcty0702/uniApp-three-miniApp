@@ -47,30 +47,22 @@
 </template>
 
 <script setup>
-    // 导入必要的库和组件
-    // #ifdef MP-WEIXIN
-    import { createScopedThreejs } from 'threejs-miniprogram'; 
-    import { registerGLTFLoader } from '@/jsm/loaders/newGLTFloader.js';
-    // #endif
-
-    // #ifdef H5
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-    // #endif
+   
     import { ref } from 'vue';  // 导入Vue的响应式API
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+    import threeLoader from '@/utils/threeLoader.js';
+    import TouchControls from '@/utils/touchControls.js';
+
     // 初始化Three.js相关变量
-    // #ifdef MP-WEIXIN
     let THREE = null;  // Three.js主对象
     let GLTFLoader = null;  // GLTFLoader对象
-    // let OrbitControls = null;  // OrbitControls对象
-    // #endif
     let canvas = null;  // WebGL画布
     let renderer = null;  // 渲染器
     let scene = null;  // 场景
     let camera = null;  // 相机
     let controls = null;  // 控制器
     let model = null;  // 3D模型对象
+    let touchControls = null;  // 触摸控制器
 
     // 响应式状态变量
     let autoRotate = ref(false);  // 是否自动旋转
@@ -107,30 +99,18 @@
     const init = async () => {
         try {
             console.log('开始初始化Three.js环境');
-            await createThree();
-            console.log('Three.js环境创建成功');
+            const threeInstance = await threeLoader.init('webgl');
             
-            createRenderer();
-            console.log('渲染器创建成功');
+            // 获取Three.js实例
+            THREE = threeInstance.THREE;
+            GLTFLoader = threeInstance.GLTFLoader;
+            renderer = threeInstance.renderer;
+            scene = threeInstance.scene;
+            camera = threeInstance.camera;
+            controls = threeInstance.controls;
             
-            createScene();
-            console.log('场景创建成功');
-            
-            createCamera();
-            console.log('相机创建成功');
-            
-            createLight();
-            console.log('光源创建成功');
-            
-            // #ifdef MP-WEIXIN
-            console.log('注册GLTFLoader和OrbitControls');
-            registerGLTFLoader(THREE);
-            GLTFLoader = THREE.GLTFLoader;
-            console.log('GLTFLoader注册成功:', !!GLTFLoader);
-            // #endif
-            
-            createControls();
-            console.log('控制器创建成功');
+            // 初始化触摸控制器
+            touchControls = new TouchControls(controls, camera, THREE);
             
             console.log('开始加载模型');
             await loadAllFloors();
@@ -150,7 +130,9 @@
     const loadAllFloors = async () => {
         for (const floor of floors.value) {
             try {
-                const loadedModel = await loadGLTF(floor.modelPath);
+                const loadedModel = await threeLoader.loadGLTF(floor.modelPath, (percent) => {
+                    progress.value = percent;
+                });
 
                 if (loadedModel) {
                     // 设置模型位置，根据楼层调整Y轴高度，增加间距
@@ -158,7 +140,7 @@
                     loadedModel.position.y = yOffset;
                     
                     // 标准化模型大小
-                    normalizeModelSize(loadedModel);
+                    threeLoader.normalizeModelSize(loadedModel);
                     loadedModel.scale.multiplyScalar(4);
                     
                     // 为每个楼层添加不同的颜色标识，便于区分
@@ -170,15 +152,6 @@
                             } else {
                                 child.material = child.material.clone();
                             }
-                            
-                            // 根据楼层设置不同的颜色色调
-                            // if (floor.id === 1) {
-                            //     // 一楼偏红
-                            //     child.material.color = new THREE.Color(1.0, 0.8, 0.8);
-                            // } else if (floor.id === 3) {
-                            //     // 三楼偏蓝
-                            //     child.material.color = new THREE.Color(0.8, 0.8, 1.0);
-                            // }
                             
                             // 设置材质为透明
                             child.material.transparent = true;
@@ -193,73 +166,13 @@
                     scene.add(loadedModel);
                 }
             } catch (error) {
-                // 错误处理
+                console.error('加载楼层模型失败:', error);
             }
         }
         
         // 调整相机位置以查看所有楼层
         adjustCameraToViewAllFloors();
     };
-
-    // 加载GLTF模型
-    const loadGLTF = (url) => {
-        return new Promise((resolve, reject) => {
-            if (!GLTFLoader) {
-                const err = new Error('GLTFLoader not initialized');
-                console.error(err);
-                error.value = 'GLTFLoader 未初始化';
-                reject(err);
-                return;
-            }
-
-            console.log('开始加载模型:', url);
-            const loader = new GLTFLoader();
-            
-            loader.load(
-                url,
-                (gltf) => {
-                    console.log('模型加载成功:', url);
-                    if (!gltf || !gltf.scene) {
-                        const err = new Error('模型加载失败：gltf 或 gltf.scene 为空');
-                        console.error(err);
-                        error.value = '模型加载失败：数据为空';
-                        reject(err);
-                        return;
-                    }
-                    
-                    gltf.scene.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material.needsUpdate = true;
-                            child.visible = true;
-                            // 确保材质正确设置
-                            if (child.material) {
-                                child.material.transparent = true;
-                                child.material.opacity = 1.0;
-                                child.material.depthWrite = true;
-                                // 添加阴影支持
-                                child.castShadow = true;
-                                child.receiveShadow = true;
-                            }
-                        }
-                    });
-                    
-                    resolve(gltf.scene);
-                },
-                (xhr) => {
-                    if (xhr.lengthComputable) {
-                        const percent = (xhr.loaded / xhr.total * 100);
-                        console.log('模型加载进度:', percent + '%');
-                        progress.value = Math.floor(percent);
-                    }
-                },
-                (error) => {
-                    console.error('模型加载错误:', error);
-                    error.value = `模型加载错误: ${error.message}`;
-                    reject(error);
-                }
-            );
-        });
-    }
 
     // 标准化模型大小
     const normalizeModelSize = (object) => {
@@ -376,132 +289,7 @@
         return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     };
 
-    // 创建Three.js环境
-    const createThree = () => {
-        return new Promise((resolve) => {
-            // #ifdef MP-WEIXIN
-            uni.createSelectorQuery()
-                .select('#webgl')
-                .node()
-                .exec((res) => {
-                    console.log('res',res);
-                    canvas = res[0].node;
-                    THREE = createScopedThreejs(canvas);
-                    // 注册 GLTFLoader
-                   
-                    resolve();
-                });
-            // #endif
-
-            // #ifdef H5
-            const canvasElement = document.getElementById('webgl');
-            canvas = canvasElement;
-            // 设置canvas尺寸
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = window.innerWidth * dpr;
-            canvas.height = window.innerHeight * dpr;
-            canvas.style.width = window.innerWidth + 'px';
-            canvas.style.height = window.innerHeight + 'px';
-            resolve();
-            // #endif
-        });
-    }
-
-    // 创建渲染器
-    const createRenderer = () => {
-        renderer = new THREE.WebGLRenderer({
-            canvas: canvas,
-            antialias: true,
-            alpha: true
-        });
-        // 获取系统信息
-        const info = uni.getSystemInfoSync();
-        renderer.setSize(info.windowWidth, info.windowHeight);
-        renderer.setPixelRatio(info.pixelRatio);
-        // 使用新版本的 API
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        renderer.shadowMap.enabled = true;
-    }
-
-    // 创建场景
-    const createScene = () => {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xeeeeee);
-        // 更新雾效果的使用方式
-        scene.fog = new THREE.Fog(0xeeeeee, 10, 100);
-    }
-
-    // 创建相机
-    const createCamera = () => {
-        const aspect = canvas.width / canvas.height;
-        camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-        camera.position.set(0, 5, 10);
-        camera.lookAt(0, 0, 0);
-    }
-
-    // 创建光源
-    const createLight = () => {
-        // 环境光
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
-        scene.add(ambientLight);
-
-        // 平行光
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        directionalLight.position.set(5, 5, 5);
-        // 添加阴影支持
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 1024;
-        directionalLight.shadow.mapSize.height = 1024;
-        scene.add(directionalLight);
-
-        // 点光源
-        const pointLight = new THREE.PointLight(0xffffff, 1.5);
-        pointLight.position.set(-5, 5, 5);
-        // 添加阴影支持
-        pointLight.castShadow = true;
-        pointLight.shadow.mapSize.width = 1024;
-        pointLight.shadow.mapSize.height = 1024;
-        scene.add(pointLight);
-    }
-
-    // 创建控制器
-    const createControls = () => {
-        // #ifdef MP-WEIXIN
-        if (!OrbitControls) {
-            throw new Error('OrbitControls not initialized');
-        }
-        // #endif
-        
-        controls = new OrbitControls(camera, renderer.domElement);
-        
-        controls.enableDamping = true; // 启用阻尼效果
-        controls.dampingFactor = 0.1;
-        controls.rotateSpeed = 0.5;
-        controls.panSpeed = 0.5;
-        controls.enableZoom = false; // 禁用缩放
-        controls.enablePan = false; // 禁用平移
-        controls.enableRotate = true; // 启用旋转
-        controls.screenSpacePanning = true;
-        controls.maxPolarAngle = Math.PI;
-        controls.minPolarAngle = 0;
-        controls.maxDistance = 50;
-        controls.minDistance = 1;
-        // 自定义左右旋转方法
-        controls.rotateLeft = function(angle) {
-            const rotationMatrix = new THREE.Matrix4();
-            rotationMatrix.makeRotationY(angle);
-            camera.position.applyMatrix4(rotationMatrix);
-            camera.lookAt(controls.target);
-        };
-
-        // 自定义上下旋转方法
-        controls.rotateUp = function(angle) {
-            const rotationMatrix = new THREE.Matrix4();
-            rotationMatrix.makeRotationX(angle);
-            camera.position.applyMatrix4(rotationMatrix);
-            camera.lookAt(controls.target);
-        };
-    }
+     
 
     // 动画循环
     const animate = () => {
@@ -532,61 +320,19 @@
     };
 
     // 处理触摸开始事件
-const handleTouchStart = (event) => {
-        if (!event.touches || event.touches.length === 0) return;
-        if (event.touches.length === 1) {
-            const touch = event.touches[0];
-            lastTouchX = touch.pageX;
-            lastTouchY = touch.pageY;
-            isDragging = true;
-        } else if (event.touches.length === 2) {
-            const dx = event.touches[0].pageX - event.touches[1].pageX;
-            const dy = event.touches[0].pageY - event.touches[1].pageY;
-            lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-            isDragging = false;
-        }
+    const handleTouchStart = (event) => {
+        touchControls.handleTouchStart(event);
     };
 
-// 处理触摸移动事件
-const handleTouchMove = (event) => {
-        if (!controls || !event.touches || event.touches.length === 0) return;
-        if (event.touches.length === 1 && isDragging) {
-            const touch = event.touches[0];
-            const deltaX = touch.pageX - lastTouchX;
-            const deltaY = touch.pageY - lastTouchY;
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                // 水平移动：左右旋转
-                const rotationSpeed = 0.005;
-                controls.rotateLeft(-deltaX * rotationSpeed);
-            } else {
-                // 垂直移动：上下旋转
-                const rotationSpeed = 0.005;
-                controls.rotateUp(-deltaY * rotationSpeed);
-            }
-            lastTouchX = touch.pageX;
-            lastTouchY = touch.pageY;
-        } else if (event.touches.length === 2) {
-            const dx = event.touches[0].pageX - event.touches[1].pageX;
-            const dy = event.touches[0].pageY - event.touches[1].pageY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (lastTouchDistance > 0) {
-                const zoomSpeed = 0.005;
-                const delta = distance - lastTouchDistance;
-                if (camera && controls) {
-                    camera.position.multiplyScalar(1 - delta * zoomSpeed);
-                }
-            }
-            lastTouchDistance = distance;
-        }
+    // 处理触摸移动事件
+    const handleTouchMove = (event) => {
+        touchControls.handleTouchMove(event);
     };
 
-// 处理触摸结束事件
-const handleTouchEnd = (event) => {
-        isDragging = false;
-        lastTouchDistance = 0;
-        if (camera) {
-        }
- };
+    // 处理触摸结束事件
+    const handleTouchEnd = () => {
+        touchControls.handleTouchEnd();
+    };
 
     // 显示当前楼层，其他楼层半透明
     const showCurrentFloor = () => {
@@ -621,49 +367,18 @@ const handleTouchEnd = (event) => {
 
     // 放大
     const zoomIn = () => {
-        if (!camera || !controls) return;
-        const zoomSpeed = 0.1;
-        camera.position.multiplyScalar(1 - zoomSpeed);
+        touchControls.zoomIn();
     };
 
     // 缩小
     const zoomOut = () => {
-        if (!camera || !controls) return;
-        const zoomSpeed = 0.1;
-        camera.position.multiplyScalar(1 + zoomSpeed);
+        touchControls.zoomOut();
     };
 
     // 重置相机位置
     const resetCamera = () => {
-        if (model) {
-            fitCameraToObject(camera, controls, model);
-        } else {
-            camera.position.set(0, 0, 5);
-            camera.lookAt(0, 0, 0);
-            if (controls) {
-                controls.target.set(0, 0, 0);
-                controls.update();
-            }
-        }
+        touchControls.resetCamera(model);
     };
-
-    // 调整相机位置以适应模型
-    const fitCameraToObject = (camera, controls, object, offset = 1.5) => {
-        if (!camera || !controls || !object) {
-            return;
-        }
-
-        const box = new THREE.Box3().setFromObject(object);
-        const size = box.getSize(new THREE.Vector3()).length();
-        const center = box.getCenter(new THREE.Vector3());
-
-        camera.position.copy(center);
-        camera.position.z += size * offset;
-        camera.lookAt(center);
-
-        controls.target.copy(center);
-        controls.update();
-    }
 
     // 清理函数
     
@@ -705,73 +420,8 @@ const handleTouchEnd = (event) => {
       position: absolute;
       top: calc(50% - 150rpx);
       left: calc(50% - 300rpx);
-      /* opacity: .7; */
     }
     
-    .flex-wrp{
-      display:flex;
-    }
-    
-    
-    .flex-item{
-      width: 200rpx;
-      height: 300rpx;
-      font-size: 26rpx;
-    }
-    
-    .demo-text-1 {
-      background: rgba(26, 173, 25, 0.7);
-    }
-    
-    .demo-text-2 {
-      background: rgba(39, 130, 215, 0.7);
-    }
-    
-    .demo-text-3 {
-      background: rgba(255, 255, 255, 0.7);
-    }
-    .floor-controls {
-        position: absolute;
-        left: 20rpx;
-        bottom: 250px;
-        z-index: 999;
-        border-radius: 12px 12px 12px 12px;
-        background-color: #fff;
-    }
-
-    .floor-btn {
-         padding: 10px;
-    }
-    .controls-container {
-        position: fixed;
-        right: 20rpx;
-        bottom: 20rpx;
-        z-index: 999;
-    }
-
-    .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 20rpx;
-    }
-
-    .control-btn {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 50%;
-        background-color: rgba(255, 255, 255, 0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 32rpx;
-        color: #333;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    }
-
-    .control-btn:active {
-        background-color: rgba(255, 255, 255, 0.6);
-    }
-
     .loading-container {
         position: fixed;
         top: 50%;
@@ -802,5 +452,48 @@ const handleTouchEnd = (event) => {
     .error-text {
         color: #ffffff;
         font-size: 28rpx;
+    }
+
+    .controls-container {
+        position: fixed;
+        right: 20rpx;
+        bottom: 20rpx;
+        z-index: 999;
+    }
+
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 20rpx;
+    }
+
+    .control-btn {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32rpx;
+        color: #333;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .control-btn:active {
+        background-color: rgba(255, 255, 255, 0.6);
+    }
+
+    .floor-controls {
+        position: absolute;
+        left: 20rpx;
+        bottom: 250px;
+        z-index: 999;
+        border-radius: 12px 12px 12px 12px;
+        background-color: #fff;
+    }
+
+    .floor-btn {
+        padding: 10px;
     }
 </style>
